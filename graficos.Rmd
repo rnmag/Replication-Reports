@@ -1,0 +1,633 @@
+---
+title: "Análise Candidaturas"
+author: "Rafael N. Magalhães"
+date:
+output: 
+  rmdformats::readthedown: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r abrir pacotes}
+library(readr)
+library(tidyverse)
+library(tidylog)
+library(knitr)
+library(ggthemes)
+library(ggplot2)
+library(ggrepel)
+```
+
+# Introdução
+
+A partir dos dados eleitorais do Tribunal Superior Eleitoral foram
+obtidos os dados sobre os resultados eleitorais e de candidatos a
+vereador das eleições municipais de Roraima em 2016. Serão realizadas
+tarefas que envolvem a junção e visualização de dados. Cada passo será
+descrito na sua seção específica.
+
+```{r QUESTÕES 1 E 2}
+# Importar arquivos
+arquivo1 <- "https://raw.githubusercontent.com/JonnyPhillips/Ciencia_de_Dados/master/Desafios/candidatos_2016_RR.csv"
+arquivo2 <- "https://raw.githubusercontent.com/JonnyPhillips/Ciencia_de_Dados/master/Desafios/resultados_2016_RR.csv"
+
+# Transformar arquivos em bases de dados
+base_candidatos <- read_delim(arquivo1, delim = ";")
+base_resultados <- read_delim(arquivo2, delim = ";")
+```
+
+# Unidades de Análise
+
+## Análise Exploratória
+
+-   **Identifique a unidade de análise do banco de candidatos - o que
+    representa cada observação/linha? Quais variáveis identificam cada
+    linha exclusivamente?** Cada observação equivale a um candidato a
+    eleições municipais no estado de Roraima e cada variável é um
+    atributo sobre os candidatos. É possível identificar cada linha
+    deste banco por meio das variáveis: *SQ_CANDIDATO, NR_CPF_CANDIDATO,
+    NR_TITULO_ELEITORAL_CANDIDATO.*
+
+-   **Identifique a unidade de análise do banco de resultados - o que
+    representa cada observação/linha? Quais variáveis identificam cada
+    linha exclusivamente?** Cada linha é o resultado da eleição
+    municipal em uma zona eleitoral para cargo de vereador em Roraima
+    em 2016. Cada coluna contém informação sobre a eleição e os
+    candidatos. É possível identificar cada linha exclusivamente por
+    meio da variável: *SQ_CANDIDATO.*
+
+-   **Liste as variáveis que compõem o identificador comum para realizar
+    a junção dos dois bancos.** Em comum, as bases possuem as seguintes
+    colunas: *SQ_CANDIDATO, NM_CANDIDATO, SG_PARTIDO*. No entanto, para
+    junção dos dados, apenas a variável \<*SQ_CANDIDATO\>* identifica
+    cada linha individualmente nas duas bases e, por isso,pode ser
+    utilizada como identificador único
+
+```{r QUESTÃO 3D, include=FALSE}
+base_3d <- base_candidatos %>% 
+  anti_join(base_resultados, by= "SQ_CANDIDATO")
+```
+
+-   **Use `anti_join` para identificar se há resultados que faltam
+    detalhes do seu candidato no banco de dados de candidatos.** Há
+    `r nrow(base_3d)` linhas que só estão presentes na base de
+    candidatos.
+
+```{r QUESTÃO 3E, include=FALSE}
+base_3e <- base_resultados %>% 
+  anti_join(base_candidatos, by= "SQ_CANDIDATO")
+
+```
+
+-   **Use `anti_join` para identificar se há candidatos faltando no
+    banco de dados de resultados. Investigando as colunas do resultado
+    de `anti_join`, você pode identificar porque eles não existem no
+    banco de resultados?** Há `r nrow(base_3e)` candidatos a mais na
+    base de dados de resultados em relação a base de dados de
+    candidatos. Em geral, há mais observações na base de candidatos do
+    que na de resultados e os candidatos considerados na base de
+    resultados estão todos presentes na base de candidatos.
+
+```{r QUESTÃO 3F}
+# Selecionar variáveis 
+base_cand_selecionada <- base_candidatos %>% 
+  select(SQ_CANDIDATO, NM_CANDIDATO, NM_UE, SG_PARTIDO,
+         NR_IDADE_DATA_POSSE, DS_GENERO, DS_GRAU_INSTRUCAO,
+         DS_COR_RACA) 
+```
+
+-   **Não precisamos trabalhar com todas as colunas para a análise então
+    para deixar mais fácil entender os processos, selecionar apenas as
+    próximas colunas do banco de dados de candidatos:** *SQ_CANDIDATO,
+    NM_CANDIDATO, NM_UE, SG_PARTIDO, NR_IDADE_DATA_POSSE, DS_GENERO,
+    DS_GRAU_INSTRUCAO, DS_COR_RACA.*
+
+# Juntando bancos de dados
+
+Cruzar os dois bancos com **`left_join`** sem adequar a unidade de
+análise irá causar a duplicação de dados de candidatos para cada
+resultado do mesmo candidato numa zona eleitoral diferente. Por isso é
+importante observar a unidade de análise quando for juntar bases.
+
+```{r QUESTÃO 4, include=FALSE}
+# Juntar bases 
+base_resultados %>% 
+  left_join(base_cand_selecionada, by= c("SQ_CANDIDATO"))
+```
+
+-   É possível modificar os dados das bases antes de uní-las de forma
+    que a unidade de análise seja equivalente e não haja perda de dados
+    ou dados faltantes na base final.
+
+```{r QUESTÃO 5A}
+# Mudar unidade de análise da base de resultado 
+  # Agrupar resultado eleitoral por candidato (não mais por zona eleitoral)
+  # Somar votos para cada candidato
+resultados_resumidos <- base_resultados %>% 
+  group_by(SQ_CANDIDATO, DS_SIT_TOT_TURNO) %>% 
+  summarise(total_votos = sum(QT_VOTOS_NOMINAIS))
+```
+
+```{r QUESTÃO 5B}
+# Juntar bases com mesma unidade de análise
+base_5b <- resultados_resumidos %>% 
+  left_join(base_cand_selecionada, by= "SQ_CANDIDATO") 
+```
+
+-   É possível unir as bases a despeito da unidade de análise. Mas então
+    serão necessários certos cuidados como trabalhar com *NAs* ou
+    modificar os dados faltantes para assumir algum valor específico.
+    Atenção também para não enviesar a análise.
+
+```{r QUESTÃO 6A, include=FALSE}
+# Juntar bases a partir da base candidatos (mais observações)
+base_cand_selecionada %>% 
+  left_join(resultados_resumidos, by="SQ_CANDIDATO")
+  # dados faltantes como NA
+```
+
+```{r QUESTÃO 6B, include=FALSE}
+# Juntar bases a partir da base candidatos (mais observações)
+  # Substituir NAs por 0
+base_cand_selecionada %>% 
+  left_join(resultados_resumidos, by="SQ_CANDIDATO") %>% 
+  mutate(total_votos = replace_na(total_votos, 0))
+```
+
+# Visualizando os dados
+
+## Candidatos para vereador por município
+
+```{r QUESTÃO 7}
+# Candidatos para vereador por município
+  # Agrupar dados por município
+  # Total de candidatos 
+  # Gráfico de colunas
+    # definir eixos
+    # definir cores
+    # colocar etiqueta nas colunas
+    # nomear eixos e gráfico
+    # definir temas
+base_5b %>% 
+  group_by(NM_UE) %>% 
+  summarise(total_candidatos = n_distinct(SQ_CANDIDATO)) %>% 
+  ggplot(aes(x= total_candidatos, y= fct_rev(NM_UE)))+
+  geom_col(fill = hcl.colors(n = 15, palette = 'Viridis')) +
+  geom_label(aes(label = total_candidatos),
+            size = 2.6)+
+  labs(x = "Quantidade de candidatos", y= "Município",
+       title = "Qunatidade de candidatos por município",
+       caption = "Fonte: Tribunal Superior Eleitoral") +
+  theme_minimal()
+```
+
+O município de Boa Vista tem a amior quantidade de candidatos a vereador
+entre os municípios de Roraima para as eleições e 2016. Uraimutã, por
+sua vez, tem a menor quantidade de candidatos.
+
+## Candidatos por gênero
+
+Os gráficos a seguir expressam a combinação entre diversas variáveis com
+o gênero dos candidatos.
+
+### Em Roraima
+
+```{r QUESTÃO 8}
+# Candidatos por gênero no estado
+  # Agrupar por gênero
+  # Total de candidatos 
+  # Gráfico de pizza
+    # definir eixos
+    # iniciar com gráfico de coluna
+    # definir cores e legenda
+    # definir etiqueta no gráfico
+    # transformar coordenadas (gráfico de pizza)
+    # definir temas
+    # nomear eixos e gráfico
+base_5b %>% 
+  group_by(DS_GENERO) %>% 
+  tally() %>% 
+  ggplot(aes(x="", y=n, fill=DS_GENERO))+
+  geom_col()+
+  scale_fill_viridis_d(direction = -1, 
+                       name= "Gênero")+
+  geom_label(aes(label=n),
+             show.legend = F, 
+             colour= c("black", "white"),
+             position= position_stack(vjust=0.5))+
+  coord_polar(theta="y")+
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank())+
+  labs(title = "Total de candidatos por gênero em Roraima",
+       caption = "Fonte: Tribunal Superior Eleitoral")
+```
+
+Na eleições de 2016 para vereador, Roraima teve 1024 candidatos e 488
+candidatas.
+
+### Por município
+
+```{r QUESTÃO 11}
+# Gráfico Quantidade de candidatos por gênero por município
+  # Agrupar por município e gênero
+  # Total de candidatos
+  # Gráfico tile
+    # definir eixos
+    # definir cores e legenda
+    # nomear eixos e gráfico
+    # definir temas
+base_5b %>% 
+  group_by(NM_UE, DS_GENERO) %>% 
+  tally() %>% 
+  ggplot()+
+  geom_tile(aes(x= DS_GENERO, y= fct_rev(NM_UE), fill=n))+
+  scale_fill_viridis_c(direction = -1, name="Quantidade de candidatos")+
+  labs(title= "Total de candidatos por gênero em cada município",
+       x= "Gênero", y= "Município", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()
+```
+
+Observa-se que, em geral, há mais homens candidatos nos municípios do
+que mulheres.
+
+### Porcentagem de candidatos por gênero em cada município
+
+```{r QUESTÃO 9}
+# Porcentagem de candidatos por gênero em cada município
+  # Agrupar por município e gênero
+  # Total de candidatos
+  # Gráfico de barras 100%
+    # definir eixos
+    # definir cores e legenda
+    # definir etiqueta no gráfico
+    # nomear eixos e gráfico
+    # definir temas (mudar posição da legenda)
+    # inverter coordenadas
+base_5b %>% 
+  group_by(NM_UE, DS_GENERO) %>% 
+  tally() %>% 
+  ggplot()+
+  geom_col(aes(y=n, x= fct_rev(NM_UE), fill=DS_GENERO),
+           position="fill")+
+  scale_fill_viridis_d(direction = -1, name="Gênero")+
+  labs(title= "Porcentagem de candidatos por gênero em cada município",
+       y= "Porcentagem", x= "Município", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  coord_flip()
+
+```
+
+Com o gráfico de percentual, é possível notar como os homens são a
+maiora dos candidatos a vereador nas eleições municipais de Roraima.
+
+### Taxa de sucesso de candidatas
+
+Entre o total de candidatas, são poucas as mulheres eleitas como podemos
+ver no gráfico abaixo.
+
+```{r QUESTÃO 10A, include=FALSE}
+# Vetor com tipos de resultados na base
+tipos_resultados <- base_5b %>% 
+  group_by(DS_SIT_TOT_TURNO) %>% 
+  distinct(DS_SIT_TOT_TURNO) %>% 
+  pull()
+
+# Base com variável binária
+  # 1 quando eleito, 0 quando não
+base_10 <- base_5b %>% 
+  mutate(cand_eleito= case_when(DS_SIT_TOT_TURNO %in% c("ELEITO POR QP",
+                                                        "ELEITO POR MÉDIA") ~1,
+                                DS_SIT_TOT_TURNO %in% c("SUPLENTE",
+                                                        "NÃO ELEITO")~0))
+
+```
+
+```{r QUESTÃO 10C}
+# Gráfico taxa de sucesso de candidatas femininas por município
+  # Filtrar gênero
+  # Agrupar por município
+  # Calcular: 
+    # total de candidatos 
+    # total de candidatos eleitos
+    # porcentagem de eleitos sobre o total de candidatos
+  # Gráfico de colunas
+    # definir eixos
+    # definir cores e legenda
+    # nomear eixos e gráfico
+    # definir tema (ajustar eixos)
+base_10 %>% 
+  filter(DS_GENERO== "FEMININO") %>%
+  group_by(NM_UE) %>% 
+  summarise(total_cand= n_distinct(SQ_CANDIDATO),
+            total_cand_eleito = sum(cand_eleito==1),
+            pct= 100*(total_cand_eleito/total_cand)) %>% 
+  ggplot()+
+  geom_col(aes(x= NM_UE, y= pct, fill=pct)) +
+  scale_fill_viridis_c(direction = -1, name="(%)")+
+  labs(title= "Taxa de sucesso das candidatas em cada município",
+       y= "Porcentagem", x= "Município", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.7))
+```
+
+### Taxa de sucesso de candidatos de ambos os gêneros
+
+No geral, a taxa de sucesso dos candidatos homens a vereador é maior do
+que a de mulheres como pode-se observar no gráfico abaixo.
+
+```{r QUESTÃO 10B, 10D}
+# Gráfico taxa de sucesso de candidatos por municípo e gênero
+  # Agrupar por município e gênero
+  # Calcular: 
+    # total de candidatos 
+    # total de candidatos eleitos
+    # porcentagem de eleitos sobre o total de candidatos
+  # Gráfico de colunas
+    # definir eixos
+    # definir cores e legenda
+    # nomear eixos e gráfico
+    # definir tema
+    # inverter coordenadas
+base_10 %>% 
+  group_by(NM_UE, DS_GENERO) %>% 
+  summarise(total_cand= n_distinct(SQ_CANDIDATO),
+            total_cand_eleito = sum(cand_eleito==1),
+            pct= 100*(total_cand_eleito/total_cand)) %>% 
+  ggplot()+
+  geom_col(aes(x= fct_rev(NM_UE), y= pct, fill=DS_GENERO),
+           position = "dodge") +
+  scale_fill_viridis_d(direction = -1, name="Gênero")+
+  labs(title= "Taxa de sucesso de candidatos por gênero em cada município",
+       y= "Porcentagem", x= "Município", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()+
+  coord_flip()
+
+```
+
+A partir dos gráficos também nota-se que o município de Caroebe é aquele
+em que as mulheres têm maior taxa de sucesso do que os homens.
+
+##  Candidatos por idade
+
+```{r QUESTÃO 12A}
+# Gráfico de candidatos por idade
+  # Substituir idade errada por NA
+  # Gráfico de histograma
+    # definir eixos e quebras
+    # definir cores
+    # nomear eixos e gráfico
+    # definir tema 
+base_5b %>% 
+  mutate(NR_IDADE_DATA_POSSE= case_when(NR_IDADE_DATA_POSSE == 999 ~NA_real_,
+                                        T~NR_IDADE_DATA_POSSE)) %>% 
+  ggplot()+
+  geom_histogram(aes(x=NR_IDADE_DATA_POSSE, fill=..count..), 
+                 breaks=seq(10,80, by=1))+
+  scale_fill_viridis_c(direction = -1, guide="none")+
+  labs(title= "Quantidade de candidatos por idade",
+       x= "Idade na posse", y= "Quantidade de candidatos", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()
+
+```
+
+Pelo gráfico nota-se que a maior parte dos candidatos tinha em torno de
+40 anos no dia da posse.
+
+### por gênero
+
+```{r QUESTÃO 12B}
+# Gráfico de candidatos por idade e gênero
+  # Substituir idade errada por NA
+  # Agrupar por gênero
+  # Gráfico de histograma
+    # definir eixos e quebras
+    # definir cores
+    # nomear eixos e gráfico
+    # definir tema (mudar posição de legenda)
+base_5b %>%
+  mutate(NR_IDADE_DATA_POSSE= case_when(NR_IDADE_DATA_POSSE == 999 ~NA_real_,
+                                        T~NR_IDADE_DATA_POSSE)) %>% 
+  group_by(DS_GENERO) %>% 
+  ggplot()+
+  geom_histogram(aes(x=NR_IDADE_DATA_POSSE, fill=DS_GENERO), 
+                 breaks=seq(10,80, by=1),
+                 position="dodge")+
+  scale_fill_viridis_d(direction = -1, name="Gênero")+
+  labs(title= "Quantidade de candidatos por idade e gênero",
+       x= "Idade na posse", y= " Qauntidade de candidatos", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+```
+
+As candidatas mulheres tendem a ser mais jovens. Os homens predominam
+entre os candidatos acima dos 30 anos.
+
+### por gênero e cor
+
+No gráfico abaixo é possível observar a relação entre idade, gênero e
+cor dos candidatos a vereador das eleições municipais de Roraima em
+2016.
+
+```{r QUESTÃO 12C}
+# Gráfico de candidatos por idade, gênero e cor
+  # # Substituir idade errada por NA
+  # Agrupar por gênero e cor
+  # Gráfico de histograma
+    # definir eixos e quebras
+    # definir separação dos quadros
+    # definir cores
+    # nomear eixos e gráfico
+    # definir tema 
+base_5b %>%
+  mutate(NR_IDADE_DATA_POSSE= case_when(NR_IDADE_DATA_POSSE == 999 ~NA_real_,
+                                        T~NR_IDADE_DATA_POSSE)) %>% 
+  group_by(DS_GENERO, DS_COR_RACA) %>% 
+  ggplot()+
+  geom_histogram(aes(x=NR_IDADE_DATA_POSSE, fill=DS_GENERO), 
+                 breaks=seq(10,80, by=1))+
+  facet_grid(cols=vars(DS_GENERO), rows = vars(DS_COR_RACA), scales = 'free_y')+
+  scale_fill_viridis_d(direction = -1, guide="none")+
+  labs(title= "Quantidade de candidatos por idade, gênero e cor",
+       x= "Idade na posse", y= "Candidatos", 
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()
+```
+
+Note ainda que no gráfico a quantidade de candidatos é variável para
+cada cor. Esta escolha foi feita para melhor observar os dados.
+
+## Resultados das eleições 
+
+Os gráficos a seguir mostram a relacão entre porcentagem média de votos
+dos candidatos numa determinada idade.
+
+```{r QUESTÃO 13A, 13B, 13C}
+base_5b %>% 
+  group_by(NM_UE) %>% 
+  mutate(NR_IDADE_DATA_POSSE= case_when(NR_IDADE_DATA_POSSE == 999 ~NA_real_,
+                                        T~NR_IDADE_DATA_POSSE),
+         total_votos_geral = sum(total_votos),
+         pct_votos_munic = 100*(total_votos/total_votos_geral)) %>%
+  group_by(NR_IDADE_DATA_POSSE) %>% 
+  mutate(media_pct_idade=mean(pct_votos_munic)) %>%
+  ggplot()+
+  geom_line(aes(x=NR_IDADE_DATA_POSSE, y= media_pct_idade, group=1),
+            colour=hcl.colors(n = 1, palette = 'Viridis'), size=1) +
+  scale_x_continuous(breaks = seq(20, 90, 10)) +
+  labs(title = "Porcentagem média dos votos por idade", x="Idade de posse", y="Porcentagem média de votos")+
+  theme_minimal()
+  
+```
+
+```{r QUESTÃO 13D}
+base_5b %>% 
+  group_by(NM_UE) %>% 
+  mutate(NR_IDADE_DATA_POSSE= case_when(NR_IDADE_DATA_POSSE == 999 ~NA_real_,
+                                        T~NR_IDADE_DATA_POSSE),
+         total_votos_geral = sum(total_votos),
+         pct_votos_munic = 100*(total_votos/total_votos_geral)) %>%
+  group_by(NR_IDADE_DATA_POSSE, DS_GENERO) %>% 
+  mutate(media_pct_idade=mean(pct_votos_munic)) %>%
+  ggplot()+
+  geom_line(aes(x=NR_IDADE_DATA_POSSE, y= media_pct_idade, 
+                group=DS_GENERO, colour= DS_GENERO), size=1) +
+  scale_x_continuous(breaks = seq(20, 90, 10)) +
+  scale_colour_viridis_d(direction = -1, name="Gênero")+
+  labs(title = "Porcentagem média dos votos por idade e gênero", x="Idade de posse", y="Porcentagem média de votos")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+```
+
+## Índice de Desenvolvimento Humano
+
+O gráfico a seguir oferecem diferentes formas de observar a relação
+entre a porcentagem de votos no PMDB e o IDH do município.
+
+```{r QUESTÃO 14A, include=FALSE}
+base_14 <-base_5b %>% 
+  group_by(NM_UE) %>% 
+  mutate(total_votos_munic=sum(total_votos)) %>% 
+  group_by(NM_UE, SG_PARTIDO) %>% 
+  summarise(total_votos_partido=sum(total_votos),
+         pct_votos_partido= 100*(total_votos_partido/total_votos_munic)) %>% 
+  distinct(NM_UE, SG_PARTIDO, pct_votos_partido, total_votos_partido)
+
+```
+
+```{r QUESTÃO 14B, include=FALSE}
+IDH <- tibble(NM_UE=c("ALTO ALEGRE", "AMAJARI", "BOAVISTA", "BONFIM",
+                      "CANTÁ", "CARACARAÍ", "CAROEBE", "IRACEMA", "MUCAJAÍ", 
+                      "NORMANDIA", "PACARAIMA", "RORAINOPOLIS", 
+                      "SÃO JOÃO DA BALIZA", "SÃO LUIZ", "UIRAMUTÃ"),
+       IDH=c(0.542, 0.484, 0.752, 0.626, 0.619, 0.624, 0.639, 0.582, 0.665, 
+             0.594, 0.650, 0.619, 0.655, 0.649, 0.453))
+
+```
+
+```{r QUESTÃO 14C, include=FALSE}
+base_14 %>% anti_join(IDH, by= "NM_UE")
+
+munic_base_5b <- base_5b %>% 
+  group_by(NM_UE) %>% 
+  distinct(NM_UE) %>% 
+  pull()
+
+munic_base_idh <- IDH %>% 
+  distinct(NM_UE) %>% 
+  pull()
+
+sort(munic_base_5b) == sort(munic_base_idh)
+
+# 3 e 12 errados
+
+```
+
+```{r QUESTÃO 14C CORREÇÕES, include=FALSE}
+IDH_arrumada <- tibble(NM_UE=c("ALTO ALEGRE", "AMAJARI", "BOA VISTA", "BONFIM",
+                      "CANTÁ", "CARACARAÍ", "CAROEBE", "IRACEMA", "MUCAJAÍ", 
+                      "NORMANDIA", "PACARAIMA", "RORAINÓPOLIS", 
+                      "SÃO JOÃO DA BALIZA", "SÃO LUIZ", "UIRAMUTÃ"),
+       IDH=c(0.542, 0.484, 0.752, 0.626, 0.619, 0.624, 0.639, 0.582, 0.665, 
+             0.594, 0.650, 0.619, 0.655, 0.649, 0.453))
+
+base_14 %>% anti_join(IDH_arrumada, by= "NM_UE")
+```
+
+```{r QUESTÃO 14D, include=FALSE}
+base_14d <- base_14 %>% left_join(IDH_arrumada, by= "NM_UE")
+
+```
+
+```{r QUESTÃO 14E}
+base_14d %>% 
+  filter(SG_PARTIDO=="PMDB") %>% 
+  ggplot(aes(y= pct_votos_partido, x= IDH))+
+  geom_point(colour= hcl.colors(n = 1, palette = 'Viridis'),
+             size=3)+
+  geom_label_repel(aes(label = NM_UE), 
+                   color = "black",
+                   size = 3) +
+    scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+    scale_y_continuous(breaks = seq(0, 20, 2)) +
+    labs(x = "IDH", y = "Porcentagem", 
+       size = 0.5,
+       title = "Porcentagem de votos do PMDB por município",
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  theme_minimal()
+
+```
+
+```{r QUESTÃO 14F}
+base_14d %>% 
+  filter(SG_PARTIDO=="PMDB") %>% 
+  ggplot(aes(y= pct_votos_partido, x= IDH, size= total_votos_partido))+
+  geom_point(colour= hcl.colors(n = 1, palette = 'Viridis'))+
+  geom_label_repel(aes(label = NM_UE), 
+                   color = "black",
+                   size = 3) +
+  scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks = seq(0, 20, 2)) +
+  labs(x = "IDH", y = "Porcentagem", 
+       size = 0.5,
+       title = "Votos do PMDB por município",
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  scale_size_continuous(name = "Número total de votos")+
+  theme_minimal()
+
+```
+
+```{r QUESTÃO 14G}
+base_14d %>% 
+  filter(SG_PARTIDO=="PMDB") %>% 
+  ggplot(aes(y= pct_votos_partido, x= IDH, colour= total_votos_partido))+
+  geom_point()+
+  geom_label_repel(aes(label = NM_UE), 
+                   color = "black",
+                   size = 3) +
+  scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks = seq(0, 20, 2)) +
+  labs(x = "IDH", y = "Porcentagem", 
+       size = 0.5,
+       title = "Votos do PMDB por município",
+       caption = "Fonte: Tribunal Superior Eleitoral")+
+  scale_colour_viridis_b(direction = -1, name = "Número total de votos")+
+  theme_minimal()
+
+```
