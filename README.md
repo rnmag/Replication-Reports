@@ -1,3 +1,3 @@
 # Replicaton Reports
 
-![Logit](https://github.com/rnmag/Empresarios-China/blob/main/logit.png?raw=true)
+![Logit](https://github.com/rnmag/Replication-Reports/blob/main/logit.png?raw=true)
