@@ -1,6 +1,6 @@
 # Replicaton Reports
 
-These reports were prepared for a workshop in the private sector, and include introductory material on regression models and a replication of a study using logit models.
+Prepared for a team workshop in the private sector, includes introductory material on regression models and a application of logit.
 
 ## Model and hypothesis
 ![Model](https://github.com/rnmag/Replication-Reports/blob/main/model.png?raw=true)
